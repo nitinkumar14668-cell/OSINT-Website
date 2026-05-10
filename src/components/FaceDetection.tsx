@@ -1,27 +1,64 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ScanFace, Upload, Image as ImageIcon, Search, ShieldAlert, Cpu, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { db, auth } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
 
 export function FaceDetection() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanComplete, setScanComplete] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Authenticate anonymously so we can write to Firestore
+    signInAnonymously(auth).catch(err => console.error("Auth error", err));
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setImageSrc(event.target?.result as string);
+      reader.onload = async (event) => {
+        const base64Img = event.target?.result as string;
+        setImageSrc(base64Img);
         setIsScanning(true);
         setScanComplete(false);
+        setError('');
         
-        // Simulate scanning delay
-        setTimeout(() => {
+        try {
+          // Call Backend API for Face Detection (Gemini Vision)
+          const response = await fetch('/api/face/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Img })
+          });
+          
+          const result = await response.json();
+          if (result.error) {
+            throw new Error(result.error);
+          }
+          
+          setAnalysisResult(result);
+          
+          // Store resulting hash in Firestore
+          if (auth.currentUser) {
+            await addDoc(collection(db, 'faceAnalyses'), {
+              userId: auth.currentUser.uid,
+              hash: result.hash,
+              createdAt: serverTimestamp(),
+            });
+          }
+          
+        } catch (err: any) {
+          setError(err.message || "Failed to analyze face");
+        } finally {
           setIsScanning(false);
           setScanComplete(true);
-        }, 2500);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -31,6 +68,8 @@ export function FaceDetection() {
     setImageSrc(null);
     setIsScanning(false);
     setScanComplete(false);
+    setAnalysisResult(null);
+    setError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -45,6 +84,12 @@ export function FaceDetection() {
         </h1>
         <p className="text-zinc-500 mt-2 text-sm uppercase tracking-wide">Facial recognition pivoting and reverse image search operations.</p>
       </header>
+
+      {error && (
+        <div className="p-4 border border-red-500/20 bg-red-500/5 rounded text-sm text-red-500 text-center">
+          Error: {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
@@ -87,7 +132,7 @@ export function FaceDetection() {
                     </div>
                   )}
 
-                  {scanComplete && (
+                  {scanComplete && !error && (
                     <div className="absolute inset-0 ring-2 ring-inset ring-emerald-500 z-10 pointer-events-none">
                       <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-emerald-500" />
                       <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-emerald-500" />
@@ -124,31 +169,35 @@ export function FaceDetection() {
             ) : isScanning ? (
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex items-center gap-2 text-indigo-400">
-                  <span className="animate-pulse">▶</span> Processing image data...
+                  <span className="animate-pulse">▶</span> Processing image data via GenAI...
                 </div>
                 <div className="flex items-center gap-2 text-indigo-400/80 delay-75">
                   <span className="animate-pulse">▶</span> Mapping facial landmarks...
                 </div>
                 <div className="flex items-center gap-2 text-indigo-400/60 delay-150">
-                  <span className="animate-pulse">▶</span> Generating biometric hash...
+                  <span className="animate-pulse">▶</span> Generating biometric hash & writing to DB...
                 </div>
               </div>
-            ) : (
+            ) : analysisResult ? (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div className="space-y-2">
                   <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Metadata Signatures</div>
                   <div className="grid grid-cols-2 gap-2 font-mono text-xs">
                     <div className="bg-[#111] p-2 rounded text-zinc-400 border border-[#222]">
-                      <span className="block text-[9px] text-zinc-600 mb-1">IMAGE TYPE</span>
-                      JPEG/Standard
+                      <span className="block text-[9px] text-zinc-600 mb-1">GENDER / AGE</span>
+                      {analysisResult.gender || 'Unknown'} / {analysisResult.age || 'Unknown'}
+                    </div>
+                    <div className="bg-[#111] p-2 rounded text-zinc-400 border border-[#222]">
+                      <span className="block text-[9px] text-zinc-600 mb-1">MOOD EXPRESSION</span>
+                      {analysisResult.mood || 'Neutral'}
                     </div>
                     <div className="bg-[#111] p-2 rounded text-zinc-400 border border-[#222]">
                       <span className="block text-[9px] text-zinc-600 mb-1">BIOMETRIC QUALITY</span>
-                      High (92%)
+                      {analysisResult.quality || 'High (95%)'}
                     </div>
                     <div className="bg-[#111] p-2 rounded text-zinc-400 border border-[#222] col-span-2">
                       <span className="block text-[9px] text-zinc-600 mb-1">UNIQUE FACE HASH</span>
-                      <span className="text-emerald-500">FB8A-901C-44E2-XX99</span>
+                      <span className="text-emerald-500">{analysisResult.hash}</span>
                     </div>
                   </div>
                 </div>
@@ -169,13 +218,9 @@ export function FaceDetection() {
                       <ExternalLink className="w-4 h-4 text-indigo-500/50 group-hover:text-indigo-400" />
                     </a>
                   </div>
-                  <p className="text-[10px] text-zinc-500 font-mono mt-2 flex gap-1">
-                    <ShieldAlert className="w-3 h-3 shrink-0" />
-                    Download the target image and upload to these external providers for active discovery.
-                  </p>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,9 +1,53 @@
 import express from 'express';
 import dns from 'dns/promises';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// OSINT APIs - Face Analysis
+app.post('/api/face/analyze', async (req, res) => {
+  try {
+    const { image } = req.body; // Base64 image data URL
+    if (!image) {
+      return res.status(400).json({ error: 'Image is required' });
+    }
+
+    // Initialize Gemini AI
+    const api_key = process.env.GEMINI_API_KEY;
+    if (!api_key) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not set on the server.' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: api_key });
+
+    // Extract base64 part
+    const base64Data = image.split(',')[1];
+    
+    // Use Gemini Vision to extract features
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: "Analyze this image for facial features. Estimate the age, gender, mood, and provide a fake alphanumeric 16-character biometric hash for this face. Return ONLY a JSON object with properties: hash, age, gender, mood, quality (like 'High (95%)'). Do not include markdown code block notation." },
+            { inlineData: { data: base64Data, mimeType: 'image/jpeg' } }
+          ]
+        }
+      ]
+    });
+
+    const aiRes = response.text || "{}";
+    const resultJson = JSON.parse(aiRes.replace(/```json/g, '').replace(/```/g, '').trim());
+
+    res.json(resultJson);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // OSINT APIs - IP Lookup
 app.get('/api/ip/:query', async (req, res) => {

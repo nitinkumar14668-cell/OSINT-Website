@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    // --- Validation Blueprints ---
+    function isValidFaceAnalysis(data) {
+      return data.keys().hasAll(['userId', 'hash', 'createdAt'])
+        && data.userId is string && data.userId.size() <= 128
+        && data.hash is string && data.hash.size() <= 200
+        && (!('confidence' in data) || data.confidence is number)
+        && data.createdAt == request.time
+        && data.userId == request.auth.uid;
+    }
+
+    // --- Path Guards ---
+    match /faceAnalyses/{analysisId} {
+      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(analysisId) 
+        && isValidFaceAnalysis(incoming());
+        
+      allow delete: if isSignedIn() 
+        && existing().userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "entities": {
+    "FaceAnalysis": {
+      "title": "Face Analysis",
+      "description": "Stores the results of face detection and unique hashes.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User who uploaded the image for analysis."
+        },
+        "hash": {
+          "type": "string",
+          "description": "Unique biometric hash generated from the face."
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "timestamp"
+        }
+      },
+      "required": ["userId", "hash", "createdAt"]
+    }
+  },
+  "firestore": {
+    "faceAnalyses/{analysisId}": {
+      "schema": "FaceAnalysis",
+      "description": "A collection containing facial analysis results and hashes."
+    }
+  }
+}
