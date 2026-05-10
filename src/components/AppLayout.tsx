@@ -1,9 +1,10 @@
-import { Activity, Globe, Hash, Search, Shield, ShieldAlert, Terminal } from 'lucide-react';
+import { Activity, Globe, Hash, Search, ShieldAlert, Terminal, ScanFace } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
 import { NetworkTool } from './NetworkTool';
 import { HashAnalyzer } from './HashAnalyzer';
 import { SocialRecon } from './SocialRecon';
+import { FaceDetection } from './FaceDetection';
 import { Dashboard } from './Dashboard';
 
 const navItems = [
@@ -11,6 +12,7 @@ const navItems = [
   { href: '/network', label: 'Network/IP Recon', icon: Globe },
   { href: '/hash', label: 'Hash Analyzer', icon: Hash },
   { href: '/social', label: 'Social Recon', icon: Search },
+  { href: '/face', label: 'Face Analysis', icon: ScanFace },
 ];
 
 export function AppLayout() {
@@ -64,6 +66,7 @@ export function AppLayout() {
           {location === '/network' && <NetworkTool />}
           {location === '/hash' && <HashAnalyzer />}
           {location === '/social' && <SocialRecon />}
+          {location === '/face' && <FaceDetection />}
         </div>
       </main>
 
