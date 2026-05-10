@@ -39,6 +39,56 @@ async function startServer() {
     }
   });
 
+  app.get('/api/social/:username', async (req, res) => {
+    try {
+      const { username } = req.params;
+      
+      const platforms = [
+        { name: 'GitHub', url: `https://github.com/${username}` },
+        { name: 'GitLab', url: `https://gitlab.com/${username}` },
+        { name: 'Reddit', url: `https://www.reddit.com/user/${username}/about.json`, profileUrl: `https://reddit.com/user/${username}` },
+        { name: 'Pinterest', url: `https://www.pinterest.com/${username}/` },
+        { name: 'HackerOne', url: `https://hackerone.com/${username}` },
+        { name: 'Bugcrowd', url: `https://bugcrowd.com/${username}` },
+        { name: 'Codecademy', url: `https://www.codecademy.com/profiles/${username}` },
+        { name: 'Pastebin', url: `https://pastebin.com/u/${username}` },
+        { name: 'Roblox', url: `https://www.roblox.com/user.aspx?username=${username}` },
+      ];
+
+      const results = await Promise.all(platforms.map(async (plat) => {
+        try {
+          const response = await fetch(plat.url, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5'
+            }
+          });
+          
+          return {
+            name: plat.name,
+            url: plat.profileUrl || plat.url,
+            // Basic heuristic: 200 means exists, 404 means it doesn't
+            exists: response.status === 200,
+            status: response.status
+          };
+        } catch (err) {
+          return {
+            name: plat.name,
+            url: plat.profileUrl || plat.url,
+            exists: false,
+            error: true
+          };
+        }
+      }));
+
+      res.json({ username, results });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
