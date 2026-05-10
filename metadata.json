@@ -1,0 +1,6 @@
+{
+  "name": "OSINT Nexus",
+  "description": "Full-working OSINT dashboard for network and identity intelligence gathering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
